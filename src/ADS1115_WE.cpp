@@ -31,14 +31,7 @@ void ADS1115_WE::reset(){
 bool ADS1115_WE::init(bool ads1015){
     useADS1015 = ads1015;
 
-#ifndef USE_TINY_WIRE_M_
-    _wire->beginTransmission(i2cAddress);
-    uint8_t success = _wire->endTransmission();
-#else
-    TinyWireM.beginTransmission(i2cAddress);
-    uint8_t success = TinyWireM.endTransmission();
-#endif
-    if(success){
+    if(isDisconnected()){
         return 0;
     }
     writeRegister(ADS1115_CONFIG_REG, ADS1115_REG_RESET_VAL);
@@ -48,6 +41,17 @@ bool ADS1115_WE::init(bool ads1015){
     deviceMeasureMode = ADS1115_SINGLE;
     autoRangeMode = false;
     return 1;
+}
+
+uint8_t ADS1115_WE::isDisconnected(){
+#ifndef USE_TINY_WIRE_M_
+    _wire->beginTransmission(i2cAddress);
+    uint8_t success = _wire->endTransmission();
+#else
+    TinyWireM.beginTransmission(i2cAddress);
+    uint8_t success = TinyWireM.endTransmission();
+#endif
+    return success;
 }
 
 void ADS1115_WE::setAlertPinMode(ADS1115_COMP_QUE mode){
@@ -264,8 +268,9 @@ void ADS1115_WE::setCompareChannels(ADS1115_MUX mux){
     
     if(!(currentConfReg & 0x0100)){  // => if not single shot mode
         convRate rate = getConvRate();      
-        delayAccToRate(rate);
-        delayAccToRate(rate);               
+        for(int i=0; i<2; i++){ // waiting time for two measurements
+            delayAccToRate(rate);
+        }                 
     }       
 }
 
@@ -284,7 +289,10 @@ void ADS1115_WE::setSingleChannel(size_t channel) {
 
 bool ADS1115_WE::isBusy(){
     uint16_t currentConfReg = readRegister(ADS1115_CONFIG_REG);
-    return (!(currentConfReg>>15) & 1);
+    if(deviceMeasureMode == ADS1115_SINGLE){
+        return (!(currentConfReg>>15) & 1);
+    }
+    else return 0;
 }
     
 
